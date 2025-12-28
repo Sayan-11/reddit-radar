@@ -4,7 +4,7 @@
 
 [[redirects]]
   from = "/api/reddit/*"
-  to = "https://www.reddit.com/:splat"
+  to = "/.netlify/functions/reddit-proxy"
   status = 200
   force = true
 
