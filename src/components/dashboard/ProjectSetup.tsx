@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Globe, FileText, Hash, Clock, Loader2, Info, Sparkles } from "lucide-react";
 import { suggestKeywordsFromUrl } from "@/lib/keywordExtractor";
+import { suggestSubreddits } from "@/lib/openai";
 import {
   Tooltip,
   TooltipContent,
@@ -34,7 +35,9 @@ export const ProjectSetup = ({ onScan, isScanning, initialUrl = "" }: ProjectSet
   });
   const [urlError, setUrlError] = useState("");
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const [isSuggestingSubreddits, setIsSuggestingSubreddits] = useState(false);
   const [suggestionError, setSuggestionError] = useState(false);
+  const [subredditSuggestionError, setSubredditSuggestionError] = useState(false);
 
   const handleSuggestKeywords = async () => {
     if (!formData.websiteUrl || isSuggesting) return;
@@ -69,6 +72,56 @@ export const ProjectSetup = ({ onScan, isScanning, initialUrl = "" }: ProjectSet
       setSuggestionError(true);
     } finally {
       setIsSuggesting(false);
+    }
+  };
+
+  const handleSuggestSubreddits = async () => {
+    if (!formData.websiteUrl || isSuggestingSubreddits) return;
+
+    setIsSuggestingSubreddits(true);
+    setSubredditSuggestionError(false);
+
+    try {
+      // Ensure URL has protocol
+      let url = formData.websiteUrl;
+      if (!url.startsWith("http")) {
+        url = "https://" + url;
+      }
+
+      // 1. Get keywords first (same logic as keyword suggestion)
+      const keywords = await suggestKeywordsFromUrl(url);
+
+      // 2. Get subreddits from OpenAI
+      const suggested = await suggestSubreddits(url, keywords);
+
+      if (suggested.length > 0) {
+        const currentSubreddits = formData.subreddits.trim();
+
+        // Parse current subreddits to avoid duplicates
+        const existingSet = new Set(
+          currentSubreddits.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+        );
+
+        // Filter out duplicates
+        const newSubreddits = suggested.filter(s => !existingSet.has(s.toLowerCase()));
+
+        if (newSubreddits.length > 0) {
+          const appendString = newSubreddits.join(", ");
+          setFormData(prev => ({
+            ...prev,
+            subreddits: currentSubreddits
+              ? `${currentSubreddits}, ${appendString}`
+              : appendString
+          }));
+        }
+      } else {
+        setSubredditSuggestionError(true);
+      }
+    } catch (error) {
+      console.error("Subreddit suggestion error:", error);
+      setSubredditSuggestionError(true);
+    } finally {
+      setIsSuggestingSubreddits(false);
     }
   };
 
@@ -142,17 +195,45 @@ export const ProjectSetup = ({ onScan, isScanning, initialUrl = "" }: ProjectSet
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="subreddits" className="flex items-center gap-2">
-              <Hash className="w-4 h-4 text-muted-foreground" />
-              Target Subreddits
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="subreddits" className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-muted-foreground" />
+                Target Subreddits
+              </Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] px-2 border-border/50 hover:bg-secondary/50"
+                onClick={handleSuggestSubreddits}
+                disabled={isSuggestingSubreddits || !formData.websiteUrl || !!urlError}
+              >
+                {isSuggestingSubreddits ? (
+                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                ) : (
+                  <Sparkles className="w-3 h-3 mr-1 text-orange" />
+                )}
+                Suggest from website
+              </Button>
+            </div>
             <Input
               id="subreddits"
               placeholder="SaaS, startups, entrepreneur"
               value={formData.subreddits}
-              onChange={(e) => setFormData({ ...formData, subreddits: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, subreddits: e.target.value });
+                setSubredditSuggestionError(false);
+              }}
               required
             />
+            <div className="space-y-1">
+
+              {subredditSuggestionError && (
+                <p className="text-[10px] text-amber-600 animate-in fade-in slide-in-from-top-1">
+                  We couldn’t confidently suggest subreddits for this website. You can enter them manually.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -199,9 +280,7 @@ export const ProjectSetup = ({ onScan, isScanning, initialUrl = "" }: ProjectSet
             required
           />
           <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground">
-              We’ll try to pull commonly used keywords from your website. You can edit or remove anything.
-            </p>
+
             {suggestionError && (
               <p className="text-[10px] text-amber-600 animate-in fade-in slide-in-from-top-1">
                 We couldn’t find usable keywords on this website. You can enter keywords manually.

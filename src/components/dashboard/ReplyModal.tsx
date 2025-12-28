@@ -136,7 +136,7 @@ export const ReplyModal = ({
           <div className="space-y-3">
             <Label className="text-base font-medium">Specific instructions (optional)</Label>
             <Textarea
-              placeholder="e.g. Avoid mentioning paid resources, Focus more on quant than verbal, Keep it short and conversational..."
+              placeholder="e.g. Avoid mentioning paid resources, keep it short and conversational..."
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               className="min-h-[80px] rounded-xl"
@@ -215,12 +215,7 @@ export const ReplyModal = ({
                 className="min-h-[150px] rounded-xl"
               />
 
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-amber-800">
-                  Manual posting recommended. Avoid links in your first reply to build trust.
-                </p>
-              </div>
+
             </div>
           )}
         </div>

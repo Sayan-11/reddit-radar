@@ -185,3 +185,48 @@ Write the reply now:`;
 
     return message;
 }
+/**
+ * Suggests relevant subreddits based on a website URL and keywords
+ */
+export async function suggestSubreddits(url: string, keywords: string[]): Promise<string[]> {
+    const openai = getOpenAIClient();
+
+    const systemMessage = `You are a Reddit expert. Your task is to suggest relevant subreddits where people discuss problems, tools, alternatives, and recommendations related to a given website and its keywords.
+
+Constraints:
+- Return ONLY subreddit names
+- No "r/" prefix
+- Lowercase
+- Max 5 subreddits
+- Min 1 subreddit if confident
+- Prefer well-known, active subreddits
+- Avoid niche or dead subreddits
+- Output as a comma-separated list`;
+
+    const userMessage = `Website URL: ${url}
+Keywords: ${keywords.join(", ")}
+
+Suggest relevant subreddits:`;
+
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: systemMessage },
+                { role: "user", content: userMessage },
+            ],
+            temperature: 0.5,
+        });
+
+        const content = completion.choices[0]?.message?.content?.trim();
+        if (!content) return [];
+
+        // Parse comma-separated values
+        return content.split(",")
+            .map(s => s.trim().toLowerCase().replace(/^(\/?r\/)/, ""))
+            .filter(s => s.length > 0);
+    } catch (error) {
+        console.error("OpenAI subreddit suggestion error:", error);
+        return [];
+    }
+}
