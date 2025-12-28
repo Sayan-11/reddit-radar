@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/api/reddit": {
+        target: "https://www.reddit.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/reddit/, ""),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

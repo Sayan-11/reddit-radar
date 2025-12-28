@@ -1,4 +1,4 @@
-import { TrendingUp, Clock, MessageCircle, ArrowUp, Sparkles } from "lucide-react";
+import { TrendingUp, Clock, MessageCircle, ArrowUp, Sparkles, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -12,6 +12,7 @@ export interface Opportunity {
   upvoteVelocity: string;
   explanation: string[];
   content: string;
+  url: string;
 }
 
 interface OpportunityCardProps {
@@ -49,6 +50,15 @@ export const OpportunityCard = ({ opportunity, onDraftReply }: OpportunityCardPr
               <Clock className="w-3 h-3" />
               {opportunity.postAge}
             </span>
+            <a
+              href={opportunity.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-orange flex items-center gap-1 ml-2 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              View on Reddit
+            </a>
           </div>
 
           <h3 className="text-lg font-semibold text-foreground mb-3 line-clamp-2">
