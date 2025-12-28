@@ -49,15 +49,10 @@ export const TopBar = () => {
         </div>
 
         {/* Title */}
-        <div className="lg:ml-64">
-          <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
-        </div>
+
 
         {/* Disclaimer */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          <AlertCircle className="w-4 h-4" />
-          <span>Manual posting only. No auto-posting.</span>
-        </div>
+
       </div>
     </header>
   );

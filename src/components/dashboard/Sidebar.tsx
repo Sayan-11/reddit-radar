@@ -46,15 +46,7 @@ export const Sidebar = () => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border/50">
-        <div className="px-4 py-3 bg-secondary/50 rounded-xl">
-          <p className="text-xs text-muted-foreground">
-            Manual posting only.
-            <br />
-            No auto-posting.
-          </p>
-        </div>
-      </div>
+
     </aside>
   );
 };

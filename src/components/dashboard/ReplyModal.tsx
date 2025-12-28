@@ -3,18 +3,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Check, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Copy, Check, Loader2, AlertTriangle, Sparkles, Info } from "lucide-react";
 import { Opportunity } from "./OpportunityCard";
 import { toast } from "@/hooks/use-toast";
+
+export type GroundingType = "subreddit" | "fallback" | null;
+export type GenerationStep = "idle" | "fetching" | "drafting";
 
 interface ReplyModalProps {
   opportunity: Opportunity | null;
   isOpen: boolean;
   onClose: () => void;
-  onGenerate: (intent: string, tone: string) => Promise<string>;
-  isGenerating: boolean;
+  onGenerate: (intent: string, instructions: string) => Promise<{ reply: string; groundingType: GroundingType }>;
+  generationStep: GenerationStep;
 }
 
 const intents = [
@@ -23,27 +38,31 @@ const intents = [
   { value: "conversion-aware", label: "Conversion-aware", description: "Gentle product mention", safe: false },
 ];
 
-const tones = [
-  { value: "founder", label: "Founder" },
-  { value: "engineer", label: "Engineer" },
-  { value: "neutral", label: "Neutral user" },
-];
-
 export const ReplyModal = ({
   opportunity,
   isOpen,
   onClose,
   onGenerate,
-  isGenerating,
+  generationStep,
 }: ReplyModalProps) => {
   const [intent, setIntent] = useState("help-first");
-  const [tone, setTone] = useState("founder");
+  const [instructions, setInstructions] = useState("");
   const [generatedReply, setGeneratedReply] = useState("");
+  const [groundingType, setGroundingType] = useState<GroundingType>(null);
   const [copied, setCopied] = useState(false);
 
+  const isGenerating = generationStep !== "idle";
+
   const handleGenerate = async () => {
-    const reply = await onGenerate(intent, tone);
-    setGeneratedReply(reply);
+    setGeneratedReply("");
+    setGroundingType(null);
+    try {
+      const result = await onGenerate(intent, instructions);
+      setGeneratedReply(result.reply);
+      setGroundingType(result.groundingType);
+    } catch (error) {
+      // Error handling is done in parent
+    }
   };
 
   const handleCopy = async () => {
@@ -59,7 +78,8 @@ export const ReplyModal = ({
   const handleClose = () => {
     setGeneratedReply("");
     setIntent("help-first");
-    setTone("founder");
+    setInstructions("");
+    setGroundingType(null);
     onClose();
   };
 
@@ -86,55 +106,49 @@ export const ReplyModal = ({
 
           {/* Intent selection */}
           <div className="space-y-3">
-            <Label className="text-base font-medium">Reply Intent</Label>
-            <RadioGroup value={intent} onValueChange={setIntent} className="space-y-2">
-              {intents.map((i) => (
-                <label
-                  key={i.value}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    intent === i.value
-                      ? "border-orange bg-orange/5"
-                      : "border-border hover:border-orange/50"
-                  }`}
-                >
-                  <RadioGroupItem value={i.value} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{i.label}</span>
-                      {!i.safe && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-xs">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          Use carefully
-                        </Badge>
-                      )}
+            <Label className="text-base font-medium">Comment objective</Label>
+            <Select value={intent} onValueChange={setIntent}>
+              <SelectTrigger className="w-full h-auto py-3">
+                <SelectValue placeholder="Select objective" />
+              </SelectTrigger>
+              <SelectContent>
+                {intents.map((i) => (
+                  <SelectItem key={i.value} value={i.value}>
+                    <div className="flex flex-col items-start text-left gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{i.label}</span>
+                        {!i.safe && (
+                          <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-[10px] px-1.5 py-0 h-5">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Use carefully
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">{i.description}</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{i.description}</p>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Tone selection */}
+          {/* Instructions (optional) */}
           <div className="space-y-3">
-            <Label className="text-base font-medium">Tone</Label>
-            <RadioGroup value={tone} onValueChange={setTone} className="flex flex-wrap gap-2">
-              {tones.map((t) => (
-                <label
-                  key={t.value}
-                  className={`px-4 py-2 rounded-xl border cursor-pointer transition-all ${
-                    tone === t.value
-                      ? "border-orange bg-orange/5"
-                      : "border-border hover:border-orange/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value={t.value} className="sr-only" />
-                    <span className="font-medium text-sm">{t.label}</span>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
+            <Label className="text-base font-medium">Specific instructions (optional)</Label>
+            <Textarea
+              placeholder="e.g. Avoid mentioning paid resources, Focus more on quant than verbal, Keep it short and conversational..."
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="min-h-[80px] rounded-xl"
+            />
+          </div>
+
+          {/* Tone Info Alert */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
+            <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-800">
+              Tone is automatically matched to how people typically write in this subreddit, based on recent high-engagement comments. This helps your reply blend in naturally.
+            </p>
           </div>
 
           {/* Generate button */}
@@ -147,12 +161,14 @@ export const ReplyModal = ({
           >
             {isGenerating ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating...
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                {generationStep === "fetching"
+                  ? "Reading the room..."
+                  : "Drafting reply..."}
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 mr-2" />
                 Generate Draft
               </>
             )}
@@ -161,7 +177,18 @@ export const ReplyModal = ({
           {/* Generated reply */}
           {generatedReply && (
             <div className="space-y-3 animate-fade-in">
-              <div className="flex items-center justify-between">
+              {/* Grounding Feedback Banner - Removed as per user request */}
+
+              {groundingType === "fallback" && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
+                  <p className="text-sm text-gray-600">
+                    Not enough recent comments were available to infer subreddit tone. This draft uses a general Reddit-safe style.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between mt-4">
                 <Label className="text-base font-medium">Generated Reply</Label>
                 <Button
                   variant="outline"
@@ -170,18 +197,18 @@ export const ReplyModal = ({
                 >
                   {copied ? (
                     <>
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 mr-1" />
                       Copied
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" />
+                      <Copy className="w-4 h-4 mr-1" />
                       Copy
                     </>
                   )}
                 </Button>
               </div>
-              
+
               <Textarea
                 value={generatedReply}
                 onChange={(e) => setGeneratedReply(e.target.value)}

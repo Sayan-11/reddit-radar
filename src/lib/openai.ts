@@ -9,7 +9,8 @@ export interface GenerateReplyInput {
     title: string;
     body: string;
     intent: "help-first" | "soft-credibility" | "conversion-aware";
-    tone: "founder" | "engineer" | "neutral";
+    instructions?: string;
+    styleExamples?: string[];
 }
 
 // Initialize OpenAI client
@@ -32,13 +33,13 @@ const getOpenAIClient = () => {
  * Generates a Reddit-appropriate reply using OpenAI
  */
 export async function generateReply(input: GenerateReplyInput): Promise<string> {
-    const { title, body, intent, tone } = input;
+    const { title, body, intent, instructions, styleExamples } = input;
 
     const openai = getOpenAIClient();
 
-    // Construct system message based on intent and tone
-    const systemMessage = buildSystemMessage(intent, tone);
-    const userMessage = buildUserMessage(title, body, intent);
+    // Construct system message based on intent
+    const systemMessage = buildSystemMessage(intent);
+    const userMessage = buildUserMessage(title, body, intent, instructions, styleExamples);
 
     try {
         const completion = await openai.chat.completions.create({
@@ -70,13 +71,16 @@ export async function generateReply(input: GenerateReplyInput): Promise<string> 
 }
 
 /**
- * Builds the system message based on intent and tone
+ * Builds the system message based on intent
  */
 function buildSystemMessage(
-    intent: GenerateReplyInput["intent"],
-    tone: GenerateReplyInput["tone"]
+    intent: GenerateReplyInput["intent"]
 ): string {
-    const baseRules = `You are a helpful Reddit user writing a genuine, authentic reply. Follow these critical rules:
+    const baseRules = `You are a regular member of the subreddit.
+You write the way people here usually do.
+You avoid sounding instructional, corporate, or promotional.
+You do not explain concepts unless asked.
+You do not include links.
 
 NEVER:
 - Sound like marketing copy or sales pitch
@@ -84,6 +88,7 @@ NEVER:
 - Include ANY links or URLs
 - Mention that you're AI-generated
 - Be overly promotional or salesy
+- Reference the style examples provided (do not quote them or mention analyzing them)
 
 ALWAYS:
 - Sound like a real person sharing genuine experience
@@ -91,7 +96,8 @@ ALWAYS:
 - Use natural, conversational language
 - Be helpful and add real value
 - Respect Reddit community norms
-- Use line breaks between paragraphs for readability`;
+- Use line breaks between paragraphs for readability
+- If uncertain, be concise and conversational`;
 
     // Intent-specific guidance
     const intentGuidance: Record<GenerateReplyInput["intent"], string> = {
@@ -121,35 +127,9 @@ CONVERSION-AWARE APPROACH (Use carefully):
 - Still prioritize being helpful over promoting`,
     };
 
-    // Tone-specific guidance
-    const toneGuidance: Record<GenerateReplyInput["tone"], string> = {
-        founder: `
-FOUNDER TONE:
-- Share entrepreneurial perspective
-- Mention "building" or "working on" naturally
-- Show hustle and problem-solving mindset
-- Use phrases like "I've been working on this" or "while building my project"`,
-
-        engineer: `
-ENGINEER TONE:
-- Technical but accessible
-- Share implementation insights
-- Use engineering perspective
-- Phrases like "from a technical standpoint" or "I built something to handle this"`,
-
-        neutral: `
-NEUTRAL TONE:
-- Regular user voice
-- No specific persona
-- Just a helpful community member
-- Avoid mentioning professional role`,
-    };
-
     return `${baseRules}
 
-${intentGuidance[intent]}
-
-${toneGuidance[tone]}`;
+${intentGuidance[intent]}`;
 }
 
 /**
@@ -158,9 +138,11 @@ ${toneGuidance[tone]}`;
 function buildUserMessage(
     title: string,
     body: string,
-    intent: GenerateReplyInput["intent"]
+    intent: GenerateReplyInput["intent"],
+    instructions?: string,
+    styleExamples?: string[]
 ): string {
-    return `Write a helpful Reddit reply to this post.
+    let message = `Write a helpful Reddit reply to this post.
 
 POST TITLE:
 ${title}
@@ -168,6 +150,29 @@ ${title}
 POST BODY:
 ${body || "(No body text)"}
 
+`;
+
+    if (instructions) {
+        message += `SPECIFIC INSTRUCTIONS (HARD CONSTRAINTS):
+${instructions}
+(If these instructions conflict with subreddit norms, prioritize safety and subreddit fit, but try to follow them as closely as possible.)
+
+`;
+    }
+
+    if (styleExamples && styleExamples.length > 0) {
+        message += `Writing style examples from this subreddit (match this style):
+${styleExamples.map((ex, i) => `--- Example ${i + 1} ---\n${ex}`).join("\n\n")}
+
+Explicit rules for style:
+- Do NOT reference these comments
+- Do NOT quote them
+- Do NOT mention that you analyzed other comments
+- Simply write in a similar voice and tone
+`;
+    }
+
+    message += `
 Remember:
 - Sound like a real Reddit user, not an AI or marketer
 - Be genuinely helpful and concise
@@ -177,4 +182,6 @@ Remember:
 ${intent === "conversion-aware" ? "- You may briefly mention (in 1 sentence) that you built something relevant, but prioritize being helpful first" : "- Do NOT mention any products or tools"}
 
 Write the reply now:`;
+
+    return message;
 }

@@ -4,14 +4,14 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { ProjectSetup, ProjectData } from "@/components/dashboard/ProjectSetup";
 import { OpportunityList } from "@/components/dashboard/OpportunityList";
-import { ReplyModal } from "@/components/dashboard/ReplyModal";
+import { ReplyModal, GroundingType, GenerationStep } from "@/components/dashboard/ReplyModal";
 import { Opportunity } from "@/components/dashboard/OpportunityCard";
 import { toast } from "@/hooks/use-toast";
 import { fetchRedditPosts, RedditPost } from "@/lib/reddit";
+import { fetchSubredditComments } from "@/lib/subredditComments";
 import { scorePost } from "@/lib/scoring";
 import { generateReply } from "@/lib/openai";
-import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
+
 
 const Dashboard = () => {
   const location = useLocation();
@@ -24,7 +24,8 @@ const Dashboard = () => {
 
   const filteredOpportunities = opportunities.filter((op) => op.score >= minScore);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState<GenerationStep>("idle");
+  const [timeframeHours, setTimeframeHours] = useState(24); // Store timeframe for comment fetching
 
   const handleScan = async (data: ProjectData) => {
     setIsScanning(true);
@@ -54,6 +55,7 @@ const Dashboard = () => {
         "7d": 168, // 7 days = 168 hours
       };
       const hours = timeframeMap[data.timeframe] || 24;
+      setTimeframeHours(hours);
 
       // Fetch posts from all subreddits
       const allPosts: RedditPost[] = [];
@@ -62,9 +64,15 @@ const Dashboard = () => {
         allPosts.push(...posts);
       }
 
+      // Parse keywords from description field
+      const keywords = data.description
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
+
       // Score each post
       const scoredOpportunities = allPosts.map((post) => {
-        const scoringResult = scorePost(post);
+        const scoringResult = scorePost(post, keywords);
 
         // Calculate post age for display
         const currentTime = Math.floor(Date.now() / 1000);
@@ -128,27 +136,49 @@ const Dashboard = () => {
     setIsModalOpen(true);
   };
 
-  const handleGenerate = async (intent: string, tone: string): Promise<string> => {
-    setIsGenerating(true);
+  const handleGenerate = async (intent: string, instructions: string): Promise<{ reply: string; groundingType: GroundingType }> => {
+    setGenerationStep("fetching");
 
     try {
       if (!selectedOpportunity) {
         throw new Error("No opportunity selected");
       }
 
-      // Call OpenAI to generate reply
+      // 1. Fetch subreddit comments for grounding
+      let styleExamples: string[] = [];
+      let groundingType: GroundingType = "fallback";
+
+      try {
+        styleExamples = await fetchSubredditComments(selectedOpportunity.subreddit, timeframeHours);
+        if (styleExamples.length >= 3) {
+          groundingType = "subreddit";
+        } else {
+          // Fallback if not enough comments
+          styleExamples = [];
+          groundingType = "fallback";
+        }
+      } catch (e) {
+        console.error("Error fetching subreddit comments:", e);
+        // Fallback silently
+        groundingType = "fallback";
+      }
+
+      setGenerationStep("drafting");
+
+      // 2. Call OpenAI to generate reply
       const reply = await generateReply({
         title: selectedOpportunity.title,
         body: selectedOpportunity.content,
         intent: intent as "help-first" | "soft-credibility" | "conversion-aware",
-        tone: tone as "founder" | "engineer" | "neutral",
+        instructions,
+        styleExamples,
       });
 
-      setIsGenerating(false);
-      return reply;
+      setGenerationStep("idle");
+      return { reply, groundingType };
     } catch (error) {
       console.error("Error generating reply:", error);
-      setIsGenerating(false);
+      setGenerationStep("idle");
 
       // Show error toast
       toast({
@@ -159,8 +189,7 @@ const Dashboard = () => {
         variant: "destructive",
       });
 
-      // Return empty string on error
-      return "";
+      throw error;
     }
   };
 
@@ -178,36 +207,12 @@ const Dashboard = () => {
           />
 
           <div className="space-y-6">
-            {opportunities.length > 0 && (
-              <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                <div className="space-y-1">
-                  <Label className="text-base font-medium">Minimum Opportunity Score: {minScore}</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Filter results to focus on high-quality opportunities
-                  </p>
-                </div>
-                <div className="w-full sm:w-64 space-y-3">
-                  <Slider
-                    value={[minScore]}
-                    onValueChange={(vals) => setMinScore(vals[0])}
-                    max={80}
-                    step={20}
-                    className="py-2"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground font-medium px-1">
-                    <span>0</span>
-                    <span>20</span>
-                    <span>40</span>
-                    <span>60</span>
-                    <span>80</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <OpportunityList
               opportunities={filteredOpportunities}
               onDraftReply={handleDraftReply}
+              minScore={minScore}
+              onMinScoreChange={setMinScore}
+              totalCount={opportunities.length}
             />
           </div>
         </div>
@@ -218,7 +223,7 @@ const Dashboard = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onGenerate={handleGenerate}
-        isGenerating={isGenerating}
+        generationStep={generationStep}
       />
     </div>
   );

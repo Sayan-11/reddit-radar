@@ -18,15 +18,15 @@ export const FinalCTA = () => {
           <div className="w-20 h-20 rounded-3xl bg-card shadow-card mx-auto mb-8 flex items-center justify-center">
             <Rocket className="w-10 h-10 text-orange" />
           </div>
-          
+
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6">
             Ready to Find Your Next Customers on Reddit?
           </h2>
-          
+
           <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto">
             No credit card required. Start discovering high-intent conversations in minutes.
           </p>
-          
+
           <Button
             variant="hero"
             size="xl"
@@ -37,9 +37,7 @@ export const FinalCTA = () => {
             <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
           </Button>
 
-          <p className="text-sm text-muted-foreground mt-6">
-            Manual posting only. No auto-posting or spam tools.
-          </p>
+
         </div>
       </div>
     </section>

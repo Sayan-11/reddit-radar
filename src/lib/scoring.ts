@@ -15,12 +15,16 @@ export interface ScoringResult {
  * @param post - The Reddit post to score
  * @returns Scoring result with score and explanation
  */
-export function scorePost(post: RedditPost): ScoringResult {
+export function scorePost(post: RedditPost, keywords: string[] = []): ScoringResult {
     let score = 0;
     const explanation: string[] = [];
 
     // Rule 1: Check title for high-intent keywords (+30 points)
-    const highIntentKeywords = ["tool", "tools", "alternative", "alternatives", "recommend"];
+    // Use provided keywords if available, otherwise fallback to defaults
+    const highIntentKeywords = keywords.length > 0
+        ? keywords.map(k => k.toLowerCase().trim())
+        : ["tool", "tools", "alternative", "alternatives", "recommend"];
+
     const titleLower = post.title.toLowerCase();
 
     const matchedKeywords = highIntentKeywords.filter((keyword) =>
