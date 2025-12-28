@@ -12,12 +12,20 @@ export default async (req, context) => {
 
         console.log(`Proxying to: ${targetUrl}`);
 
-        // Fetch from Reddit with a custom User-Agent
-        // This is critical to avoid 403 errors from datacenter IPs
+        // Fetch from Reddit with headers that mimic a real browser
+        // This helps bypass 403 blocks on datacenter IPs
         const response = await fetch(targetUrl, {
             headers: {
-                'User-Agent': 'RedditRadar/1.0.0 (Netlify Function; +https://reddit-radar.netlify.app)',
-                'Accept': 'application/json'
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
             }
         });
 
@@ -30,7 +38,7 @@ export default async (req, context) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*', // Enable CORS for the client
-                'Cache-Control': 'public, s-maxage=60' // Cache for 60s to be nice to Reddit
+                'Cache-Control': 'public, s-maxage=60' // Cache for 60s
             }
         });
     } catch (error) {
