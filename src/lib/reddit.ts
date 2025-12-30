@@ -94,9 +94,15 @@ export async function fetchRedditPosts(
                 const idMatch = item.guid.match(/comments\/([a-z0-9]+)\//);
                 const id = idMatch ? idMatch[1] : Math.random().toString(36).substr(2, 9);
 
-                // Clean up content (RSS often has HTML)
-                // We strip HTML tags for the 'selftext' preview
-                const selftext = item.content.replace(/<[^>]*>?/gm, '').substring(0, 500);
+                // Clean up content (RSS often has HTML and metadata footers)
+                // 1. Strip HTML tags
+                // 2. Remove "submitted by /u/..." and "[link] [comments]" footers
+                let selftext = item.content.replace(/<[^>]*>?/gm, '');
+                // Remove the "submitted by..." line and any trailing [link] [comments]
+                selftext = selftext.replace(/submitted by\s+.*$/gi, '');
+                selftext = selftext.replace(/\[link\]/gi, '');
+                selftext = selftext.replace(/\[comments\]/gi, '');
+                selftext = selftext.trim().substring(0, 500);
 
                 // Extract permalink from link
                 const permalink = item.link.replace('https://www.reddit.com', '');

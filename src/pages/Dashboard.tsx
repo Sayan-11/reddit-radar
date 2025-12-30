@@ -136,7 +136,12 @@ const Dashboard = () => {
     setIsModalOpen(true);
   };
 
-  const handleGenerate = async (intent: string, instructions: string): Promise<{ reply: string; groundingType: GroundingType }> => {
+  const handleGenerate = async (
+    intent: string,
+    instructions: string,
+    persona: string,
+    length: string
+  ): Promise<{ reply: string; groundingType: GroundingType }> => {
     setGenerationStep("fetching");
 
     try {
@@ -150,10 +155,10 @@ const Dashboard = () => {
 
       try {
         styleExamples = await fetchSubredditComments(selectedOpportunity.subreddit, timeframeHours);
-        if (styleExamples.length >= 3) {
+        if (styleExamples.length > 0) {
           groundingType = "subreddit";
         } else {
-          // Fallback if not enough comments
+          // Fallback if no comments at all
           styleExamples = [];
           groundingType = "fallback";
         }
@@ -170,6 +175,8 @@ const Dashboard = () => {
         title: selectedOpportunity.title,
         body: selectedOpportunity.content,
         intent: intent as "help-first" | "soft-credibility" | "conversion-aware",
+        persona: persona as any,
+        length: length as any,
         instructions,
         styleExamples,
       });

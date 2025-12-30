@@ -9,6 +9,8 @@ export interface GenerateReplyInput {
     title: string;
     body: string;
     intent: "help-first" | "soft-credibility" | "conversion-aware";
+    persona: "neutral-peer" | "experienced-practitioner" | "curious-collaborator" | "builder-indie-hacker" | "light-authority";
+    length: "short" | "medium" | "long";
     instructions?: string;
     styleExamples?: string[];
 }
@@ -33,13 +35,13 @@ const getOpenAIClient = () => {
  * Generates a Reddit-appropriate reply using OpenAI
  */
 export async function generateReply(input: GenerateReplyInput): Promise<string> {
-    const { title, body, intent, instructions, styleExamples } = input;
+    const { title, body, intent, persona, length, instructions, styleExamples } = input;
 
     const openai = getOpenAIClient();
 
-    // Construct system message based on intent
-    const systemMessage = buildSystemMessage(intent);
-    const userMessage = buildUserMessage(title, body, intent, instructions, styleExamples);
+    // Construct system message based on intent and persona
+    const systemMessage = buildSystemMessage(intent, persona, length);
+    const userMessage = buildUserMessage(title, body, intent, persona, length, instructions, styleExamples);
 
     try {
         const completion = await openai.chat.completions.create({
@@ -49,7 +51,7 @@ export async function generateReply(input: GenerateReplyInput): Promise<string> 
                 { role: "user", content: userMessage },
             ],
             temperature: 0.8, // Balanced creativity for natural responses
-            max_tokens: 500, // Keep replies concise
+            max_tokens: 1000, // Increased to accommodate longer replies if requested
         });
 
         const reply = completion.choices[0]?.message?.content?.trim();
@@ -71,11 +73,56 @@ export async function generateReply(input: GenerateReplyInput): Promise<string> 
 }
 
 /**
- * Builds the system message based on intent
+ * Builds the system message based on intent, persona, and length
  */
 function buildSystemMessage(
-    intent: GenerateReplyInput["intent"]
+    intent: GenerateReplyInput["intent"],
+    persona: GenerateReplyInput["persona"],
+    length: GenerateReplyInput["length"]
 ): string {
+    const personaGuidance: Record<GenerateReplyInput["persona"], string> = {
+        "neutral-peer": `PERSONA: Neutral Peer
+- Sound like a regular Redditor sharing personal experience.
+- Use casual, everyday language.
+- Avoid sounding like an expert or authority.
+- This is the safest, most native-sounding option.`,
+        "experienced-practitioner": `PERSONA: Experienced Practitioner
+- Share advice based on firsthand experience.
+- Do NOT sound authoritative or preachy.
+- Use "In my experience..." or "I've found that..."
+- Focus on practical, real-world insights.`,
+        "curious-collaborator": `PERSONA: Curious Collaborator
+- Ask thoughtful questions to move the discussion forward.
+- Add light guidance based on your own perspective.
+- Be supportive and collaborative.
+- Focus on exploration rather than definitive answers.`,
+        "builder-indie-hacker": `PERSONA: Builder / Indie Hacker
+- Frame insights from a builder's perspective.
+- Be subtle and transparent about your background.
+- Use language like "When I was building X..." or "I'm working on something similar..."
+- Focus on the "how" and "why" of building things.`,
+        "light-authority": `PERSONA: Light Authority
+- Be confident and precise in your insights.
+- Do NOT make overt authority claims or list credentials.
+- Let the quality of your advice establish your expertise.
+- Be direct but stay humble.`,
+    };
+
+    const lengthGuidance: Record<GenerateReplyInput["length"], string> = {
+        "short": `LENGTH: Short
+- Be quick and concise.
+- 1-2 short paragraphs maximum.
+- Get straight to the point.`,
+        "medium": `LENGTH: Medium
+- Be balanced and conversational.
+- 2-3 paragraphs.
+- Provide a good level of detail without being wordy.`,
+        "long": `LENGTH: Long
+- Be detailed and thorough.
+- 3-5 paragraphs.
+- Use examples and provide in-depth explanations where appropriate.`,
+    };
+
     const baseRules = `You are a regular member of the subreddit.
 You write the way people here usually do.
 You avoid sounding instructional, corporate, or promotional.
@@ -92,12 +139,15 @@ NEVER:
 
 ALWAYS:
 - Sound like a real person sharing genuine experience
-- Be concise and to the point (2-4 paragraphs max)
 - Use natural, conversational language
 - Be helpful and add real value
 - Respect Reddit community norms
 - Use line breaks between paragraphs for readability
-- If uncertain, be concise and conversational`;
+- If uncertain, be concise and conversational
+
+${personaGuidance[persona]}
+
+${lengthGuidance[length]}`;
 
     // Intent-specific guidance
     const intentGuidance: Record<GenerateReplyInput["intent"], string> = {
@@ -139,6 +189,8 @@ function buildUserMessage(
     title: string,
     body: string,
     intent: GenerateReplyInput["intent"],
+    persona: GenerateReplyInput["persona"],
+    length: GenerateReplyInput["length"],
     instructions?: string,
     styleExamples?: string[]
 ): string {
@@ -175,9 +227,10 @@ Explicit rules for style:
     message += `
 Remember:
 - Sound like a real Reddit user, not an AI or marketer
-- Be genuinely helpful and concise
+- Be genuinely helpful
 - NO links or URLs
-- 2-4 paragraphs maximum
+- Adopt the "${persona}" persona consistently
+- Match the "${length}" reply length
 - Natural, conversational tone
 ${intent === "conversion-aware" ? "- You may briefly mention (in 1 sentence) that you built something relevant, but prioritize being helpful first" : "- Do NOT mention any products or tools"}
 
