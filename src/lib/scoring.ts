@@ -1,71 +1,102 @@
 /**
  * Opportunity Scoring Logic
- * Scores Reddit posts based on explicit, deterministic rules
+ * Deterministic, explainable scoring for Reddit opportunities
  */
 
 import { RedditPost } from "./reddit";
+import { SubredditContext } from "./reddit";
 
 export interface ScoringResult {
     score: number;
     explanation: string[];
 }
 
-/**
- * Scores a Reddit post based on predefined rules
- * @param post - The Reddit post to score
- * @returns Scoring result with score and explanation
- */
-export function scorePost(post: RedditPost, keywords: string[] = []): ScoringResult {
+export function scorePost(
+    post: RedditPost,
+    keywords: string[] = [],
+    subredditContext?: SubredditContext | null
+): ScoringResult {
     let score = 0;
     const explanation: string[] = [];
 
-    // Rule 1: Check title for high-intent keywords (+30 points)
-    // Use provided keywords if available, otherwise fallback to defaults
-    const highIntentKeywords = keywords.length > 0
-        ? keywords.map(k => k.toLowerCase().trim())
-        : ["tool", "tools", "alternative", "alternatives", "recommend"];
+    /* -----------------------------
+       1. INTENT SIGNAL (MAX 40)
+    ------------------------------*/
 
-    const titleLower = post.title.toLowerCase();
+    const intentKeywords =
+        keywords.length > 0
+            ? keywords.map((k) => k.toLowerCase())
+            : ["tool", "tools", "alternative", "alternatives", "recommend", "best"];
 
-    const matchedKeywords = highIntentKeywords.filter((keyword) =>
-        titleLower.includes(keyword)
-    );
+    const title = post.title.toLowerCase();
+    const matched = intentKeywords.filter((k) => title.includes(k));
 
-    if (matchedKeywords.length > 0) {
-        score += 30;
+    if (matched.length > 0) {
+        const intentScore = Math.min(40, matched.length * 20);
+        score += intentScore;
         explanation.push(
-            `High-intent keywords found: ${matchedKeywords.join(", ")} (+30)`
+            `High-intent keywords found (${matched.join(", ")}) (+${intentScore})`
         );
     }
 
-    // Rule 2: Low comment count indicates early opportunity (+20 points)
-    if (post.num_comments < 15) {
+    /* -----------------------------
+       2. COMPETITION SIGNAL (MAX 20)
+    ------------------------------*/
+
+    if (post.num_comments < 3) {
         score += 20;
-        explanation.push(`Low comment count (${post.num_comments} comments) (+20)`);
+        explanation.push(`Very low competition (${post.num_comments} comments) (+20)`);
+    } else if (post.num_comments < 8) {
+        score += 10;
+        explanation.push(`Low competition (${post.num_comments} comments) (+10)`);
     }
 
-    // Rule 3: Recent post (< 3 hours old) indicates fresh opportunity (+25 points)
-    const currentTime = Math.floor(Date.now() / 1000); // Current Unix timestamp in seconds
-    const postAgeInSeconds = currentTime - post.created_utc;
-    const postAgeInHours = postAgeInSeconds / 3600;
+    /* -----------------------------
+       3. FRESHNESS SIGNAL (MAX 25)
+    ------------------------------*/
 
-    if (postAgeInHours < 3) {
+    const now = Math.floor(Date.now() / 1000);
+    const ageMinutes = Math.floor((now - post.created_utc) / 60);
+
+    if (ageMinutes < 60) {
         score += 25;
-        const minutesAgo = Math.floor(postAgeInSeconds / 60);
-        explanation.push(
-            `Recent post (${minutesAgo} minutes old) (+25)`
-        );
+        explanation.push(`Posted within last hour (+25)`);
+    } else if (ageMinutes < 180) {
+        score += 15;
+        explanation.push(`Posted within last 3 hours (+15)`);
+    } else {
+        explanation.push(`Older post (${Math.floor(ageMinutes / 60)}h ago)`);
     }
 
-    // Cap score at 100
-    if (score > 100) {
-        score = 100;
-        explanation.push("Score capped at 100");
+    /* -----------------------------
+       4. SUBREDDIT VELOCITY (MAX 15)
+    ------------------------------*/
+
+    if (subredditContext) {
+        const { avgPostsPerHour } = subredditContext;
+
+        if (avgPostsPerHour < 2) {
+            score += 15;
+            explanation.push(`Slow-moving subreddit (${avgPostsPerHour} posts/hr) (+15)`);
+        } else if (avgPostsPerHour < 6) {
+            score += 8;
+            explanation.push(`Moderate posting velocity (${avgPostsPerHour} posts/hr) (+8)`);
+        } else {
+            score -= 5;
+            explanation.push(`High content churn (${avgPostsPerHour} posts/hr) (-5)`);
+        }
+    } else {
+        explanation.push(`Subreddit velocity data unavailable`);
     }
 
-    // Add summary if no points were earned
+    /* -----------------------------
+       FINAL NORMALIZATION
+    ------------------------------*/
+
+    score = Math.max(0, Math.min(100, score));
+
     if (score === 0) {
-        explanation.push("No scoring criteria met");
+        explanation.push("No strong opportunity signals detected");
     }
 
     return {

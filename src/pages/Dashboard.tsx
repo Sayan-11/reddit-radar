@@ -7,7 +7,7 @@ import { OpportunityList } from "@/components/dashboard/OpportunityList";
 import { ReplyModal, GroundingType, GenerationStep } from "@/components/dashboard/ReplyModal";
 import { Opportunity } from "@/components/dashboard/OpportunityCard";
 import { toast } from "@/hooks/use-toast";
-import { fetchRedditPosts, RedditPost } from "@/lib/reddit";
+import { fetchRedditPosts, RedditPost, SubredditContext } from "@/lib/reddit";
 import { fetchSubredditComments } from "@/lib/subredditComments";
 import { scorePost } from "@/lib/scoring";
 import { generateReply } from "@/lib/openai";
@@ -59,9 +59,13 @@ const Dashboard = () => {
 
       // Fetch posts from all subreddits
       const allPosts: RedditPost[] = [];
+      const contexts: Record<string, SubredditContext> = {};
       for (const subreddit of subredditList) {
-        const posts = await fetchRedditPosts(subreddit, hours);
-        allPosts.push(...posts);
+        const result = await fetchRedditPosts(subreddit, hours);
+        allPosts.push(...result.posts);
+        if (result.subredditContext) {
+          contexts[result.subredditContext.subreddit] = result.subredditContext;
+        }
       }
 
       // Parse keywords from description field
@@ -72,7 +76,7 @@ const Dashboard = () => {
 
       // Score each post
       const scoredOpportunities = allPosts.map((post) => {
-        const scoringResult = scorePost(post, keywords);
+        const scoringResult = scorePost(post, keywords, contexts[post.subreddit]);
 
         // Calculate post age for display
         const currentTime = Math.floor(Date.now() / 1000);
